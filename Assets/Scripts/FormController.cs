@@ -16,29 +16,29 @@ public class FormController : MonoBehaviour {
     [SerializeField] private InputField sourceValueInputField;
     [SerializeField] private Toggle randomSourceValueToggle;
 
-    
+
     [SerializeField] private GameObject operationsMenu;
     [SerializeField] private Dropdown operationTypeDropdown;
     [SerializeField] private InputField parameterValueInputField;
-    
+
 
     [SerializeField] private GameObject arrayElementsContainer;
     [SerializeField] private GameObject arrayElementComponentPrefab;
-    
+
     [SerializeField] private Dropdown historyDropdown;
 
 
     [SerializeField] private int arrayElementsYStep = 42;
+    [SerializeField] private int arrayElementsXStep = 200;
     [SerializeField] private int arrayElementsYOffset = 0;
-    
-    [SerializeField] private InputField filePathSerializableInputField;
-    
-    [SerializeField] private InputField filePathJsonInputField;
-    
+    [SerializeField] private int arrayElementsXOffset = 0;
 
-    
+    [SerializeField] private InputField filePathSerializableInputField;
+    [SerializeField] private InputField filePathJsonInputField;
+
+
     private Dictionary<int, GameObject> arrayElementComponents = new Dictionary<int, GameObject>();
-    
+
     private DataHistory history = new DataHistory(new List<DataHistoryElement>());
 
     public void Awake() {
@@ -48,15 +48,21 @@ public class FormController : MonoBehaviour {
 
 
     public void onArrayInitButtonPressed() {
+        if (!validateInitValue()) {
+            return;
+        }
+
         dataController.init(
             dataTypeDropdown.value == 1,
-             sourceValueInputField.text,
+            sourceValueInputField.text,
             int.Parse(arraySizeInputField.text),
             randomSourceValueToggle.isOn);
-        
+
         RenderElements();
         string arrayType = dataController.isFloat ? "FLOAT" : "INT";
-        MakeDataHistorySnapshot(currentDateTime() +" Init of "+arrayType+" array, size = "+ dataController.getSize());
+        MakeDataHistorySnapshot(currentDateTime() + " Init of " + arrayType + " array, size = " +
+                                dataController.getSize());
+        operationsMenu.SetActive(true);
     }
 
     public void onHistroyElementChanged() {
@@ -66,13 +72,15 @@ public class FormController : MonoBehaviour {
     }
 
     private void MakeDataHistorySnapshot(string operationDescription) {
-        Dictionary<int,string> currentValues = dataController.getStringValues();
+        Dictionary<int, string> currentValues = dataController.getStringValues();
         int id = history.getNextId();
         string[] values = new string[currentValues.Count];
-        foreach (KeyValuePair<int,string> keyValuePair in currentValues) {
+        foreach (KeyValuePair<int, string> keyValuePair in currentValues) {
             values[keyValuePair.Key] = keyValuePair.Value;
         }
-        DataHistoryElement historyElement = new DataHistoryElement(history.getNextId(), dataController.isFloat, dataController.getSize(), operationDescription, values);
+
+        DataHistoryElement historyElement = new DataHistoryElement(history.getNextId(), dataController.isFloat,
+            dataController.getSize(), operationDescription, values);
         history.addDataHistoryElement(historyElement);
         renderHistory(id);
     }
@@ -80,12 +88,11 @@ public class FormController : MonoBehaviour {
     private void restoreStateFromHistory(int id) {
         DataHistoryElement historyElement = history.historyElements[id];
         dataController.restoreStateFromHistory(historyElement);
-        
     }
 
     private void renderHistory(int id) {
         historyDropdown.options.Clear();
-        foreach (KeyValuePair<int,string> pair in history.getIdsWithDescriptions()) {
+        foreach (KeyValuePair<int, string> pair in history.getIdsWithDescriptions()) {
             historyDropdown.options.Add(new Dropdown.OptionData(pair.Value));
         }
 
@@ -93,18 +100,22 @@ public class FormController : MonoBehaviour {
         historyDropdown.RefreshShownValue();
     }
 
-
+    // OUT and REF parameters used here..
     public void onDoOperationButtonPressed() {
+        if (!validateParamValue()) {
+            return;
+        }
         OperationType operationType = dropdownToOperationType(operationTypeDropdown.value);
         string param = parameterValueInputField.text;
         List<int> errorElements = new List<int>();
         Dictionary<int, string> errorMessages = new Dictionary<int, string>();
-        List<int> validElements = dataController.DoOperation(operationType, param, ref errorElements, ref errorMessages);
+        dataController.DoOperation(operationType, param, ref errorElements, ref errorMessages, out var validElements);
         RenderElements();
         MarkElements(validElements, errorElements);
         ShowErrorMEssages(errorMessages);
+        string arrayType = dataController.isFloat ? " FLOAT" : " INT";
         string operationDescription =
-            currentDateTime() + " After operation " + operationType + " for " + validElements.Count;
+            currentDateTime() + arrayType + " array, result of operation '" + operationType + "' with param " + param;
         MakeDataHistorySnapshot(operationDescription);
     }
 
@@ -113,43 +124,47 @@ public class FormController : MonoBehaviour {
         BinaryFormatter binaryFormatter = new BinaryFormatter();
         using (FileStream fileStream = new FileStream(filePath, FileMode.Create)) {
             binaryFormatter.Serialize(fileStream, history);
-            Debug.Log("History saved to binary file => "+ filePath);
+            Debug.Log("History saved to binary file => " + filePath);
         }
     }
-    
+
     public void onLoadHistorySerializableButtonPressed() {
         string filePath = filePathSerializableInputField.text;
         BinaryFormatter binaryFormatter = new BinaryFormatter();
         using (FileStream fileStream = new FileStream(filePath, FileMode.Open)) {
-            history = (DataHistory)binaryFormatter.Deserialize(fileStream);
-            Debug.Log("History was loaded from binary file => "+ filePath);
+            history = (DataHistory) binaryFormatter.Deserialize(fileStream);
+            Debug.Log("History was loaded from binary file => " + filePath);
         }
+
         renderHistory(history.historyElements.Count);
+        operationsMenu.SetActive(true);
     }
-    
-    
+
+
     public void onSaveHistoryJsonButtonPressed() {
         string filePath = filePathJsonInputField.text;
         string json = JsonUtility.ToJson(history);
         File.WriteAllText(filePath, json);
         Debug.Log("History saved to json file: " + filePath);
     }
-    
+
     public void onLoadHistoryJsonButtonPressed() {
         string filePath = filePathJsonInputField.text;
         string json = File.ReadAllText(filePath);
-        history = (DataHistory)JsonUtility.FromJson<DataHistory>(json);
-        Debug.Log("History was loaded from json file => "+ filePath);
+        history = JsonUtility.FromJson<DataHistory>(json);
+        Debug.Log("History was loaded from json file => " + filePath);
         renderHistory(history.historyElements.Count);
+        operationsMenu.SetActive(true);
     }
 
     private string currentDateTime() {
-        return "["+DateTime.Now+"]"; 
+        return "[" + DateTime.Now + "]";
     }
 
-    private void ShowErrorMEssages(Dictionary<int,string> errorMessages) {
-        foreach (KeyValuePair<int,string> keyValuePair in errorMessages) {
-            Debug.LogWarning("Operation with element ["+keyValuePair.Key+"] is not well completed! Error message -> " + keyValuePair.Value);
+    private void ShowErrorMEssages(Dictionary<int, string> errorMessages) {
+        foreach (KeyValuePair<int, string> keyValuePair in errorMessages) {
+            Debug.LogWarning("Operation with element [" + keyValuePair.Key +
+                             "] is not well completed! Error message -> " + keyValuePair.Value);
         }
     }
 
@@ -158,7 +173,8 @@ public class FormController : MonoBehaviour {
             GameObject validElement = arrayElementComponents[validElementIndex];
             ArrayElementController script = validElement.GetComponent<ArrayElementController>();
             script.MarkAsValidResultOfOperation();
-        }    
+        }
+
         foreach (int errorElementIndex in errorElements) {
             GameObject errorElement = arrayElementComponents[errorElementIndex];
             ArrayElementController script = errorElement.GetComponent<ArrayElementController>();
@@ -167,7 +183,7 @@ public class FormController : MonoBehaviour {
     }
 
     private OperationType dropdownToOperationType(int val) {
-        return (OperationType)val;
+        return (OperationType) val;
     }
 
     public void onRandomSourceValueToggleChanged() {
@@ -178,15 +194,19 @@ public class FormController : MonoBehaviour {
         else {
             sourceValueInputField.enabled = true;
         }
+
+        validateInitValue();
     }
-    
+
 
     private void RenderElements() {
         cleanUpArrayElementComponents();
         int i = 0;
         foreach (var keyValuePair in dataController.getStringValues()) {
             Vector3 pos = arrayElementsContainer.transform.position;
-            Vector3 elementPosition = new Vector3(pos.x, arrayElementsYOffset + pos.y - arrayElementsYStep * i, pos.z);
+            float y = arrayElementsYOffset + pos.y - arrayElementsYStep * (i%10);
+            float x = arrayElementsXOffset + pos.x + ((int)i/10) * arrayElementsXStep;
+            Vector3 elementPosition = new Vector3(x, y, pos.z);
             GameObject element = Instantiate(arrayElementComponentPrefab, elementPosition, Quaternion.identity,
                 arrayElementsContainer.transform);
             arrayElementComponents.Add(keyValuePair.Key, element);
@@ -195,14 +215,56 @@ public class FormController : MonoBehaviour {
             i++;
         }
     }
-    
-    
+
+
     private void cleanUpArrayElementComponents() {
-        foreach (KeyValuePair<int,GameObject> component in arrayElementComponents) {
+        foreach (KeyValuePair<int, GameObject> component in arrayElementComponents) {
             Destroy(component.Value);
         }
+
         arrayElementComponents.Clear();
     }
 
+    public void onArraySizeValueChanged() {
+        if (arraySizeInputField.text == "") {
+            arraySizeInputField.text = "1";
+            return;
+        }
 
+        if (int.Parse(arraySizeInputField.text) > 40) {
+            arraySizeInputField.text = "40";
+        }
+        else if (int.Parse(arraySizeInputField.text) < 1) {
+            arraySizeInputField.text = "1";
+        }
+    }
+
+    public bool validateInitValue() {
+        if (!randomSourceValueToggle.isOn) {
+            if (sourceValueInputField.text == "") {
+                sourceValueInputField.image.color = Color.red;
+                return false;
+            }
+        }
+
+        sourceValueInputField.image.color = Color.white;
+        return true;
+    }
+
+    public void onInitValueChanged() {
+        validateInitValue();
+    }
+
+    public bool validateParamValue() {
+        if (parameterValueInputField.text == "") {
+            parameterValueInputField.image.color = Color.red;
+            return false;
+        }
+        parameterValueInputField.image.color = Color.white;
+        return true;
+    }
+    
+    public void onParameterValueChanged() {
+        validateParamValue();
+    }
 }

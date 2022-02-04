@@ -85,10 +85,10 @@ public class DataController {
         return true;
     }
 
-    public List<int> DoOperation(OperationType operationType, string param, ref List<int> errorElements, ref Dictionary<int ,string> errorMessages) {
-        List<int> updatedElements = new List<int>();
+    public void DoOperation(OperationType operationType, string param, ref List<int> errorElements, ref Dictionary<int ,string> errorMessages, out List<int> updatedElements) {
+        updatedElements = new List<int>();
         if (!initIsDone) {
-            return updatedElements;
+            return;
         }
         if (isFloat) {
             float val = float.Parse(param);
@@ -98,7 +98,6 @@ public class DataController {
             int val = int.Parse(param);
             updatedElements = intModel.updateValues(operationType, Int.of(val), ref errorElements, ref errorMessages);
         }
-        return updatedElements;
     }
     
     public Dictionary<int, string> getStringValues() {

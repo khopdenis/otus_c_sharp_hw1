@@ -23,7 +23,6 @@ public struct DataHistory {
         foreach (DataHistoryElement historyElement in historyElements) {
             result.Add(historyElement.id, historyElement.description);
         }
-
         return result;
     }
 }
